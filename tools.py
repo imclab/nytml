@@ -27,14 +27,14 @@ def datefromISO(str_date):
     year, month, day = str_date.split('-')
     return datetime.date(int(year), int(month), int(day))
 
+# retrieve a comment list from the file pointed to by date object d_obj
 def get_comment_list(d_obj):
     try:
         f = open(str(d_obj.year) + '/' + d_obj.isoformat() + '.json', 'r')
         comment_list = json.load(f)
         f.close()
         return comment_list
-    except ValueError:
-        return []
+    except ValueError: return []
 
 # loads n comments from the dataset (2005 - 2013). 
 # If date is unspecified then pick a random starting date. 
@@ -50,8 +50,10 @@ def load_n_comments(n, start=None, section=None):
     def bySection(c): return c['section'] == section
 
     while True:
+        d_iso = start.isoformat()
 
-        if cmp(start, MAX_DATE) == 0: return comments
+        if cmp(start, MAX_DATE) == 0: 
+            return (d_iso, comments)
 
         c = get_comment_list(start)
 
@@ -64,8 +66,8 @@ def load_n_comments(n, start=None, section=None):
 
         c_len = len(comments)
 
-        if c_len > n: return comments[:n]
-        elif c_len == n: return comments
+        if c_len > n: return (d_iso, comments[:n])
+        elif c_len == n: return (d_iso, comments)
         else: start = incrementDate(start)
         
 # traverse all comments from year s to year e
