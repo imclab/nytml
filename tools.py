@@ -36,6 +36,11 @@ def get_comment_list(d_obj):
         return comment_list
     except ValueError: return []
 
+def write_comment_list(d_obj, c_list):
+    f = open(str(d_obj.year) + '/' + d_obj.isoformat() + '.json', 'w')
+    json.dump(c_list, f)
+    f.close()
+
 # loads n comments from the dataset (2005 - 2013). 
 # If date is unspecified then pick a random starting date. 
 # If section is unspecified then load comments of any section
@@ -70,23 +75,59 @@ def load_n_comments(n, start=None, section=None):
         elif c_len == n: return (d_iso, comments)
         else: start = incrementDate(start)
         
-# traverse all comments from year s to year e
-def traverse_all(s, e):
+# traverse all comments
+def traverse_all():
     gc.enable() # enable garbage collector
-    s, e, urlmap = date_from_yr(s), date_from_yr(e), {}
+    s, e, urlmap = MIN_DATE, MAX_DATE, {}
 
     s_y = s.year # starting year
+    sections = [] # store valid sections
+
+    # retrieve valid sections from sections.txt
+    with open('sections.txt', 'r') as ss:
+        for ln in ss: sections.append(ln.split()[0])
+
+    # function used to apply filter
+    def byS(x): return x['section'] in sections
+
+    # file to write to
+    # f, count = open('features', 'w+'), 0
+
+    # f.write('# Legend: Recs Wc Pos Neg Seq DoW Hour\n')
 
     while cmp(s, e) != 0:
-        print s.isoformat()
 
+        # track progress & collect garbage
         if s_y != s.year:
+            print s_y
             s_y = s.year
             gc.collect()
 
-        c = get_comment_list(s)
+        # retrieve comments
+        c = filter(byS, get_comment_list(s))
+        write_comment_list(s, c) # write filtered list
         if len(c) == 0:
             s = incrementDate(s)
             continue
-        
-        # insert whatever you want to do here
+
+        for cx in c:
+            
+            """
+            # retrieve and parse data
+            rec = str(cx['recommendationCount'])
+            wcc = str(cx['wordcount'])
+            snt = cx['sentiment']
+            pos = str(round(float(snt['pos']), 3))
+            neg = str(round(float(snt['neg']), 3))
+            csq = str(cx['commentSequence'])            
+            cdt = datetime.datetime.fromtimestamp(float(cx['approveDate']))
+            wd = str(cdt.isoweekday())
+
+            # write to file
+            line = ' '.join([rec,wcc,pos,neg,csq,wd,str(cdt.hour)])
+            f.write(line + '\n')
+            count += 1
+        s = incrementDate(s)
+    print str(count) + ' comments traversed'
+    f.close()
+    """
