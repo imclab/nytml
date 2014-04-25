@@ -15,13 +15,6 @@ def randomDate(s, e):
     def f(y): return int((y.toordinal()))
     return date.fromordinal(random.randrange(f(s), f(e)))
 
-# comapres two date objects at day-level granularity
-def compareDate(d1, d2):
-    n1, n2 = d1.toordinal(), d2.toordinal()
-    if n1 < n2: return -1
-    elif n1 == n2: return 0
-    elif n1 > n2: return 1
-
 # construct a date object from a string YYYY-MM-DD
 def datefromISO(str_date):
     year, month, day = str_date.split('-')
@@ -51,7 +44,6 @@ def load_n_comments(n, start=None, section=None):
     else: start = randomDate(MIN_DATE, MAX_DATE)
 
     n, comments = int(n), []
-
     def bySection(c): return c['section'] == section
 
     while True:
@@ -70,10 +62,36 @@ def load_n_comments(n, start=None, section=None):
         comments.extend(c)
 
         c_len = len(comments)
-
         if c_len > n: return (d_iso, comments[:n])
         elif c_len == n: return (d_iso, comments)
         else: start = incrementDate(start)
+
+def isString(s):
+    return str(type(s)) == "<type 'str'>"
+
+def isDate(d):
+    return str(type(d)) == "<type 'datetime.date'>"
+
+# n is sample size; s, e are iso-string dates
+def date_range_sample(n, s, e, section=None):
+    OUT = []
+    gc.enable()
+
+    if (isString(s) and isString(e)):
+        start, end = datefromISO(s), datefromISO(e)
+    elif (isDate(s) and isDate(e)): start, end = s, e
+    
+    while cmp(start, end) != 0:
+        c = get_comment_list(start)
+        OUT.extend(c)
+        start = incrementDate(start)
+    
+    pop = len(OUT)
+    if pop < n:
+        print 'date range too narrow for', n
+        print 'returning %d comments' % pop
+        return (pop, OUT)
+    else: return (pop, random.sample(OUT, n))
         
 # traverse all comments
 def traverse_all():

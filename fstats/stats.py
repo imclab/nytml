@@ -1,7 +1,8 @@
+import powerlaw
 import numpy, scipy, math
 from random import sample
 from numpy import array
-from scipy.stats import poisson
+from scipy.stats import poisson, geom, norm
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression, Ridge
 
@@ -11,7 +12,7 @@ def loadFeatures():
     data, names = {}, ['recs', 'wc', 'pos', 'neg', 'seq', 'dow', 'hour']
 
     for name in names: data[name] = []
-    with open('features', 'r') as f:
+    with open('features.txt', 'r') as f:
         for line in f:
             if '#' in line: continue
             linedata = line.split()
@@ -47,23 +48,48 @@ def regression():
     plt.suptitle('Ordinary Least Squares (OLS)')
     plt.show()
 
+def pareto(data):
+    n = len(data)
+    print n
+    def ln(x): return math.log(x+1)
+    logdata = map(ln, data)
+    alpha = float(n) / numpy.sum(logdata)
+    print 'alpha parameter ', alpha
+    ar = numpy.arange(2, 40)
+    def ppdf(x): return (alpha / (math.pow(x,(alpha+1))))
+    return (ar, map(ppdf, ar))
+
 def recDistribution():
     data = loadFeatures()
-    recs = array(data['recs'], int)
+    recs = array(data['recs'], float)
     mu = numpy.average(recs)
     print mu
     dist = poisson(mu)
-    dist2 = poisson(math.sqrt(mu))
-    x = numpy.arange(0, numpy.amax(recs))
+    dist2 = geom((1.0/mu))
+    dist3 = pareto(recs)
+    x = numpy.arange(1, numpy.amax(recs))
     h = plt.hist(recs, bins=range(40), normed=True)
-    plt.plot(x, dist.pmf(x), color='black')
-    plt.plot(x, dist2.pmf(x), color='red')
+    plt.plot(dist3[0], dist3[1], color='yellow', label='Pareto', linewidth=3)
+    plt.plot(x, dist.pmf(x), color='black', label='Poisson', linewidth=3)
+    plt.plot(x, dist2.pmf(x), color='red', label='Geometric', linewidth=3)
+    plt.legend()
     plt.xlabel('Recommendation Count')
-    plt.ylabel('% of Total Comments')
-    plt.suptitle('Fitting Rec. Count to the Poisson Distribution')
+    plt.ylabel('Actual Value (% of Data) / Probability')
+    plt.legend()
+    plt.suptitle('Fitting Rec. Count')
     plt.xlim(0,40)
     plt.show()
 
-recDistribution()
-
+def sentiment_dist():
+    data, dif = loadFeatures(), []
+    pos = array(data['pos'], float)
+    neg = array(data['neg'], float)
+    pmean, pstd = norm.fit(pos)
+    nmean, nstd = norm.fit(neg)
+    print 'positive: mean, std: ', pmean, pstd
+    print 'negative: mean, std: ', nmean, nstd    
     
+    for i in range(len(pos)):
+        dif.append(pos[i] - neg[i])
+    dmean, dstd = norm.fit(dif)
+    print 'delta: mean, std: ', dmean, dstd

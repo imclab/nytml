@@ -1,15 +1,37 @@
-import gc, copy, random, tools, numpy, sklearn, datetime
-from sklearn.feature_extraction.text import CountVectorizer
+import gc, copy, random, tools, numpy, sklearn, datetime, time
 from sklearn.naive_bayes import MultinomialNB
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.cross_validation import cross_val_score
+from sklearn.metrics import classification_report
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 
-test_factor = 10
-pop_size, sample_size = 50000, 5000
 
-# discretize sentiment into binary labels
-def discretize_s(s_map):
-    p, n = float(s_map['pos']), float(s_map['neg'])
-    if p >= n: return 1
-    else: return 0 
+from datetime import date
+
+# print scores for each label given true vals, predicted vals
+def label_score(Y, Y_Pred, n_labels):
+
+    counts, correct = {}, {}
+    labels = range(n_labels)
+    for label in labels:
+        counts[label], correct[label] = 0, 0
+
+    for i in range(len(Y)):
+
+        true = int(Y[i])
+        predicted = int(Y_Pred[i])
+
+        for j in labels:
+            if true == j:
+                counts[j] += 1
+                if predicted == j:
+                    correct[j] += 1
+    
+    for k in labels:
+        x, y = counts[k], correct[k]
+        values = (k, x, y, float(y) / float(x))
+        print 'Class %d: count = %d, correct = %d, score = %0.3f' % values
 
 # discretize recommendation count
 def discretize_r(r_count):
@@ -18,17 +40,13 @@ def discretize_r(r_count):
 
 def npa(iter_object): return numpy.array(iter_object)
 
-def classify_text(cls_label):
+def classify_text(n, s, e, folds, vrz):
 
-    if cls_label not in ['sentiment','recommendationCount']:
-        print 'invalid class label'
-        return None
-
+    cls_label = 'recommendationCount'
     gc.enable() # turn on garbage collection
-    comments = tools.load_n_comments(pop_size, start='2012-01-01')
-    print 'Loaded ' + str(pop_size) + ' data points'
-    comments = random.sample(comments[1], sample_size)
-    print 'Selected random sample of size ' + str(sample_size) + ' from population'
+    pop, comments = tools.date_range_sample(n, s, e)
+    print 'Loaded %d comments' % pop
+    print 'Selected random sample of size %d from date range' % n
     gc.collect()
     print 'Garbage Collection complete'
 
@@ -36,71 +54,71 @@ def classify_text(cls_label):
 
     # extract text and desired label
     for c in comments:
-
         text = c['commentBody'] # text is the feature data
-        
-        if cls_label == 'sentiment': 
-            label = discretize_s(c['sentiment'])
-        elif cls_label == 'recommendationCount' : 
-            label = discretize_r(c['recommendationCount'])
-
+        label = discretize_r(c['recommendationCount'])
         labels.append(label)
         features.append(text.encode('utf8','ignore'))
 
     print 'Extracted text (features) and class labels'
 
-    v = CountVectorizer(min_df=1) # X -> feature data
-    X = (v.fit_transform(features)).toarray()
+    # transform text into count vectors
+    v_features = (vrz.fit_transform(features)).toarray()
 
     print 'Finished vectorizing text data'
 
-    Y = npa(labels) # Y -> corresponding labels
+    random_indices = copy.deepcopy(range(len(labels)))
+    random.shuffle(random_indices)
+    X, Y = [], []
 
-    if len(X) == len(Y): print 'Data check 1...OK'
+    for i in random_indices:
+        Y.append(labels[i])
+        X.append(v_features[i])
+
+    if len(X) == len(Y): print 'Data check ... OK'
     else: 
         print 'Data check failed. Aborting execution'
         return None
 
-    random_indices = copy.deepcopy(range(len(Y)))
-    random.shuffle(random_indices)
+    # MNB = RandomForestClassifier()
+    MNB = MultinomialNB()
+    kfold_m = (cross_val_score(MNB, npa(X), npa(Y), cv=folds)).mean()
 
-    tst_n, trn_n = 0, 0
-    trainX, testX, trainY, testY = [], [], [], []
-
-    for i in random_indices:
-        if tst_n < (Y.size / test_factor):
-            testX.append(X[i])
-            testY.append(Y[i])
-            tst_n += 1
-        else:
-            trainX.append(X[i])
-            trainY.append(Y[i])
-            trn_n += 1
-
-    print 'Randomly partitioned data into test and training sets'
-    print 'Test set contains ' + str(tst_n) + ' data points'
-    print 'Training set contains ' + str(trn_n) + ' data points'
-
-    if (len(trainX) == len(trainY)) and (len(testX) == len(testY)): 
-        print 'Data check 2...OK'
-    else: 
-        print 'Data check failed. Aborting'
-        return None
-
-    nb_classifier = MultinomialNB()
-    nb_classifier.fit(npa(trainX), npa(trainY))
+    MNB2 = MultinomialNB()
+    MNB2.fit(npa(X), npa(Y))
+    Y_Pred = MNB2.predict(npa(X))
     
-    results = str(nb_classifier.score(npa(testX), npa(testY)))
+    label_score(Y, Y_Pred, 2)
 
-    print 'accuracy of Multinomial Naive Bayes Classifier ' + results
+    return (kfold_m, classification_report(npa(Y), Y_Pred))
 
+    # print 'MNB Accuracy: %0.2f (+/- %0.2f)' % results
 
-print 'Performing Naive Bayes Classification w/ sentiment label'
-classify_text('sentiment')
+def processReport(report):
+    l = report.split('\n')
+    p0 = l[2].split()[1]
+    p1 = l[3].split()[1]
+    w_a = l[5].split()[3]
+    return (p0, p1, w_a)
 
-print ''
+def iterateMNB(n_trials, d_range, s_size, folds, m_feat):
 
-print 'Performing Naive Bayes Classification w/ recommendation count label'
-classify_text('recommendationCount')
+    KFS, WA, P1S = [], [], []
 
+    # upper and lower date limits
+    ll = datetime.date(2012,01,01)
+    ul = datetime.date(2013,06,01)
+    
+    # v = CountVectorizer(min_df=1)
+    v = TfidfVectorizer(min_df=1)
 
+    for i in range(n_trials):
+        s = tools.randomDate(ll, ul)
+        e = date.fromordinal(s.toordinal() + d_range)
+        kfm, report = classify_text(s_size, s, e, folds, v)
+
+        print report
+    
+start_time = time.clock()
+iterateMNB(2, 3, 5000, 5, 2000)
+elapsed = time.clock() - start_time
+print 'Elapsed time: %f' % elapsed
