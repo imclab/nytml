@@ -1,5 +1,6 @@
 import datetime, random, numpy, json, gc
 from datetime import date
+from copy import deepcopy
 
 MIN_DATE = datetime.date(2005,1,1)
 MAX_DATE = datetime.date(2014,1,1)
@@ -93,44 +94,24 @@ def date_range_sample(n, s, e, section=None):
         return (pop, OUT)
     else: return (pop, random.sample(OUT, n))
         
-# traverse all comments
-def traverse_all():
-    gc.enable() # enable garbage collector
-    s, e, urlmap = MIN_DATE, MAX_DATE, {}
 
-    s_y = s.year # starting year
-    sections = [] # store valid sections
 
-    # retrieve valid sections from sections.txt
-    with open('sections.txt', 'r') as ss:
-        for ln in ss: sections.append(ln.split()[0])
-
-    # function used to apply filter
-    def byS(x): return x['section'] in sections
-
-    # file to write to
-    # f, count = open('features', 'w+'), 0
-
-    # f.write('# Legend: Recs Wc Pos Neg Seq DoW Hour\n')
-
-    while cmp(s, e) != 0:
-
-        # track progress & collect garbage
-        if s_y != s.year:
-            print s_y
-            s_y = s.year
-            gc.collect()
-
-        # retrieve comments
-        c = filter(byS, get_comment_list(s))
-        write_comment_list(s, c) # write filtered list
-        if len(c) == 0:
-            s = incrementDate(s)
-            continue
-
-        for cx in c:
+"""
+    OLD CODE
+            if 'commentTitle' in comment: 
+                del comment['commentTitle']
+            comment['commentID'] = count_id
             
-            """
+            if 'articleURL' in comment and 'approveDate' in comment:
+
+                c_url = comment['articleURL']
+                val = (count_id, comment['approveDate'])
+                if c_url in urlmap:
+                    urlmap[c_url].append(deepcopy(val))
+                else: urlmap[c_url] = [deepcopy(val)]
+    with open('url_timemap.json', 'w+') as f: json.dump(urlmap, f)
+
+    OLD CODE
             # retrieve and parse data
             rec = str(cx['recommendationCount'])
             wcc = str(cx['wordcount'])
@@ -148,4 +129,12 @@ def traverse_all():
         s = incrementDate(s)
     print str(count) + ' comments traversed'
     f.close()
-    """
+
+    OLD CODE
+    sections = [] # store valid sections
+    # retrieve valid sections from sections.txt
+    with open('sections.txt', 'r') as ss:
+        for ln in ss: sections.append(ln.split()[0])
+    # function used to apply filter
+    def byS(x): return x['section'] in sections
+"""

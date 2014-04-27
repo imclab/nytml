@@ -6,119 +6,102 @@ from sklearn.metrics import classification_report
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-
 from datetime import date
+from copy import deepcopy
+import classifier_tools
+from classifier_tools import score_by_label, kfold_crossval, randomize
 
-# print scores for each label given true vals, predicted vals
-def label_score(Y, Y_Pred, n_labels):
-
-    counts, correct = {}, {}
-    labels = range(n_labels)
-    for label in labels:
-        counts[label], correct[label] = 0, 0
-
-    for i in range(len(Y)):
-
-        true = int(Y[i])
-        predicted = int(Y_Pred[i])
-
-        for j in labels:
-            if true == j:
-                counts[j] += 1
-                if predicted == j:
-                    correct[j] += 1
-    
-    for k in labels:
-        x, y = counts[k], correct[k]
-        values = (k, x, y, float(y) / float(x))
-        print 'Class %d: count = %d, correct = %d, score = %0.3f' % values
-
-# discretize recommendation count
-def discretize_r(r_count):
+# discretize rec count
+def discretize(r_count):
     if int(r_count) > 10: return 1
     else: return 0 
 
 def npa(iter_object): return numpy.array(iter_object)
 
-def classify_text(n, s, e, folds, vrz):
+# retrieve n-size sample from date range s to e
+# return raw features and label data (X, Y)
+def get_data(n, s, e):
 
-    cls_label = 'recommendationCount'
     gc.enable() # turn on garbage collection
     pop, comments = tools.date_range_sample(n, s, e)
     print 'Loaded %d comments' % pop
-    print 'Selected random sample of size %d from date range' % n
+    print 'Random sample of %d from date range' % n
     gc.collect()
     print 'Garbage Collection complete'
 
     features, labels = [], []
 
-    # extract text and desired label
     for c in comments:
         text = c['commentBody'] # text is the feature data
-        label = discretize_r(c['recommendationCount'])
-        labels.append(label)
-        features.append(text.encode('utf8','ignore'))
+        features.append(text.encode('ascii','ignore'))
+        labels.append(discretize(c['recommendationCount']))
 
     print 'Extracted text (features) and class labels'
 
-    # transform text into count vectors
-    v_features = (vrz.fit_transform(features)).toarray()
+    return (features, labels)
 
+def classify_text(n, s, e, folds, vrz):
+
+    features, labels = get_data(n, s, e)
+    
+    POS_features = classifier_tools.POS_vectorize(features)
+    print 'Finished Part of Speech Tagging'
+    v_features = (vrz.fit_transform(POS_features)).toarray()
+
+    # transform text into count vectors
+    # v_features = (vrz.fit_transform(features)).toarray()
     print 'Finished vectorizing text data'
 
-    random_indices = copy.deepcopy(range(len(labels)))
-    random.shuffle(random_indices)
-    X, Y = [], []
+    X, Y = randomize(v_features, labels)
 
-    for i in random_indices:
-        Y.append(labels[i])
-        X.append(v_features[i])
+    print len(X[0])
 
     if len(X) == len(Y): print 'Data check ... OK'
     else: 
         print 'Data check failed. Aborting execution'
         return None
 
-    # MNB = RandomForestClassifier()
+    return kfold_crossval(X, Y, folds, 2)
+
+    """ 
     MNB = MultinomialNB()
-    kfold_m = (cross_val_score(MNB, npa(X), npa(Y), cv=folds)).mean()
+    # MNB = RandomForestClassifier()
 
     MNB2 = MultinomialNB()
     MNB2.fit(npa(X), npa(Y))
     Y_Pred = MNB2.predict(npa(X))
-    
-    label_score(Y, Y_Pred, 2)
 
-    return (kfold_m, classification_report(npa(Y), Y_Pred))
+    print 'Classifier Accuracy'
+    results = score_by_label(Y, Y_Pred, 2)
+    print results
 
+    return classification_report(npa(Y), Y_Pred)
     # print 'MNB Accuracy: %0.2f (+/- %0.2f)' % results
+    """
 
-def processReport(report):
-    l = report.split('\n')
-    p0 = l[2].split()[1]
-    p1 = l[3].split()[1]
-    w_a = l[5].split()[3]
-    return (p0, p1, w_a)
 
-def iterateMNB(n_trials, d_range, s_size, folds, m_feat):
+def iterateMNB(n_trials, d_range, s_size, folds):
 
-    KFS, WA, P1S = [], [], []
+    C0L, C1L, WL = [], [], []
 
     # upper and lower date limits
     ll = datetime.date(2012,01,01)
     ul = datetime.date(2013,06,01)
     
-    # v = CountVectorizer(min_df=1)
-    v = TfidfVectorizer(min_df=1)
+    v = CountVectorizer(ngram_range=(1,2),token_pattern=r'\b\w+\b', min_df=1)
+    # v = TfidfVectorizer(min_df=1)
 
     for i in range(n_trials):
         s = tools.randomDate(ll, ul)
         e = date.fromordinal(s.toordinal() + d_range)
-        kfm, report = classify_text(s_size, s, e, folds, v)
+        c0, c1, w = classify_text(s_size, s, e, folds, v)
+        C0L.append(c0); C1L.append(c1); WL.append(w)
 
-        print report
+    print 'mean class-0 accuracy (recall) score : %0.3f' % (npa(C0L)).mean()
+    print 'mean class-1 accuracy (recall) score : %0.3f' % (npa(C1L)).mean()
+    print 'mean weighted accuracy (recall) score : %0.3f' % (npa(WL)).mean()
     
 start_time = time.clock()
-iterateMNB(2, 3, 5000, 5, 2000)
+iterateMNB(10, 3, 5000, 2)
 elapsed = time.clock() - start_time
 print 'Elapsed time: %f' % elapsed
