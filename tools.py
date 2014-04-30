@@ -93,7 +93,43 @@ def date_range_sample(n, s, e, section=None):
         print 'returning %d comments' % pop
         return (pop, OUT)
     else: return (pop, random.sample(OUT, n))
-        
+
+def get_polarity(sentiment):
+    return (float(sentiment['pos']) - float(sentiment['neg']))
+
+# traverse all comments
+def traverse_all():
+    gc.enable()
+    s, e = MIN_DATE, MAX_DATE
+    s_y = s.year
+
+    f = open('features.tab', 'w+')
+    nms = ['id', 'recs', 'wc', 
+           'polar', 'rnk', 'time', 'cls']
+    f.write('\t'.join(nms) + '\n')
+    dtypes = ['c', 'c', 'c', 'c', 'c', 'c', 'd']
+    f.write('\t'.join(dtypes) + '\n')
+    flags = ['meta', '', '', '', '', '', 'class']
+    f.write('\t'.join(flags) + '\n')
+
+    while cmp(s, e) != 0:
+        if s_y != s.year:
+            print s_y
+            s_y = s.year
+            gc.collect()
+
+        comments = get_comment_list(s)
+
+        if len(comments) == 0:
+            s = incrementDate(s)
+            continue
+
+        for comment in comments:
+            print 'hello'
+            # do something
+            
+        s = incrementDate(s)
+    f.close()
 
 
 """

@@ -1,8 +1,10 @@
-import random
+import random, gc
 from textblob import TextBlob
 from copy import deepcopy
 from numpy import array
 from sklearn.naive_bayes import MultinomialNB
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.feature_extraction.text import CountVectorizer
 
 # scores for each label given true vals, predicted vals
 def score_by_label(Y, Y_Pred, n_labels):
@@ -59,7 +61,7 @@ def randomize(l1, l2):
     return (X, Y)
 
 # X is the feature data, Y is the class label vector
-def kfold_crossval(X, Y, k, n_labels):
+def kfold_crossval(X, Y, k, n_labels, RF=False):
     labels, size, lmap, kmap, = range(n_labels), len(Y), {}, {}
     for label in labels: lmap[label] = []
  
@@ -81,7 +83,8 @@ def kfold_crossval(X, Y, k, n_labels):
         x_test, y_test = unzip(test)
         x_train, y_train = unzip(train)
 
-        MNB = MultinomialNB()
+        if RF: MNB = RandomForestClassifier()
+        else: MNB = MultinomialNB()
         MNB.fit(x_train, y_train)
         results.append(score_by_label(y_test, MNB.predict(x_test), n_labels))
 
@@ -103,13 +106,36 @@ def POS_vectorize(documents):
         OUT.append(' '.join(taglist))
     return OUT
 
-    """
-    tokenized = map(nltk.word_tokenize, documents)
-    tagged, OUT = nltk.batch_pos_tag(tokenized), []
+def BOW_predict(features, labels, RF=False):
+    # get bag-of-words count vectors, fit MNB and get predictions
+    v1 = CountVectorizer(min_df=1, max_features=2000)
+    count_vectors = (v1.fit_transform(deepcopy(features))).toarray()
+    MNB = MultinomialNB()
+    MNB.fit(array(count_vectors), array(labels))
+    print 'bag-of-words count model fitted'
+    return MNB.predict(array(count_vectors))
 
-    for sentence in tagged:
-        tokens, tags = unzip(sentence)
-        OUT.append(' '.join(tags))
+def POS_predict(features, labels, RF=False):
+    # get part-of-speech count vectors, fit MNB and get predictions
+    POS_features = POS_vectorize(deepcopy(features))
+    v2 = CountVectorizer(ngram_range=(1,2), token_pattern=r'\b\w+\b', min_df=1)
+    POS_vectors = (v2.fit_transform(POS_features)).toarray()
+    MNB = MultinomialNB()
+    MNB.fit(array(POS_vectors), array(labels))
+    print 'part-of-speech count model fitted'
+    return MNB.predict(array(POS_vectors))
+
+def new_features(features, labels, meta):
+
+    gc.enable()
+    # BOW_Y_Pred = BOW_predict(features, labels)
+    POS_Y_Pred = POS_predict(features, labels)
+    gc.collect()
     
-    return OUT
-    """
+    if len(POS_Y_Pred) == len(meta): 
+        # if len(POS_Y_Pred) == len(meta):
+        print 'Data check OK'
+    else: print 'Data check failed, aborting.'; return None
+    for j in range(len(meta)): meta[j] += [POS_Y_Pred[j]]
+
+    return meta

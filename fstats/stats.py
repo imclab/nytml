@@ -6,23 +6,60 @@ from scipy.stats import poisson, geom, norm
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression, Ridge
 
+
+def lg2(x):
+    return math.log(int(x) + 1, 2)
+
 def loadFeatures():
 
-    cnt, thresh = 1, 1000000
-    data, names = {}, ['recs', 'wc', 'pos', 'neg', 'seq', 'dow', 'hour']
+    cnt, thresh = 0, 1000000
+    data, names = {}, ['id', 'recs', 'wc', 'pol', 'rnk', 'time', 'cls']
 
     for name in names: data[name] = []
-    with open('features.txt', 'r') as f:
+    with open('features.tab', 'r') as f:
         for line in f:
-            if '#' in line: continue
+            if line[0].isalpha(): continue
             linedata = line.split()
-            if not linedata[4].isdigit(): continue
-            if int(linedata[4]) > 100000: continue
             for i in range(len(linedata)):
                 data[names[i]].append(linedata[i])
             cnt += 1
             if (cnt % thresh) == 0: print cnt
-    return data
+    return (cnt, data)
+
+def multi_var_OLS(sample_size, data, size, xarg='all', log=True):
+
+    X, Y = [], []
+    sample_indices = sample(range(size), sample_size)
+
+    for i in sample_indices:
+
+        Y.append(lg2((data['recs'])[i]))
+
+        if log:
+            xvals = [ lg2((data['wc'])[i]), 
+                      lg2((data['time'])[i]), 
+                      float((data['pol'])[i]) ]
+        else:
+            xvals = [ int((data['wc'])[i]), 
+                      int((data['time'])[i]), 
+                      float((data['pol'])[i]) ]
+
+        if xarg == 'wc': X.append([xvals[0]])
+        elif xarg == 'time': X.append([xvals[1]])
+        elif xarg == 'pol' : X.append([xvals[2]])
+        else: X.append(xvals)
+
+    print 'Random Sample Crated'
+    print 'Data is as follows, X[:5], Y[:5]', X[:5], Y[:5]
+
+    reg = LinearRegression()
+    reg.fit(X, Y)
+    print 'Variance Score : %0.4f' % reg.score(X, Y)
+
+    if xarg != 'all':
+        plt.scatter(X, Y)
+        plt.plot(X, reg.predict(X))
+        plt.show()
 
 def regression():
     n = 100000 # sample size
