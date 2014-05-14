@@ -3,6 +3,14 @@ nytml
 
 Python tools and scripts to do machine learning on NYTimes comments
 
+Uses the following Python modules for primary data analysis:
+
+Orange
+scikit-learn
+TextBlob
+
+Along with standard tools of numpy, scipy, and matplotlb.
+
 Data files contain a list of comment dictionaries with the following fields:
 
      'commentTitle' - unique string
